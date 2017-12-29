@@ -1,0 +1,49 @@
+#!/bin/sh
+
+# Define charset
+charset="abcdefghijk""mnopqrstuvwxyz""ABCDEFGH""JKLMN""PQRSTUVWXYZ""23456789"
+
+# Compute bucket-size and allowed range
+bucket_size=$(printf "$charset" | wc -c)
+range_size=$(( (256 / $bucket_size) * $bucket_size ))
+
+# Read password-strength from command-line
+group_count=0
+group_size=0
+case "$1" in
+	"--short" | "--weak" ) group_count=3; group_size=4 ;;
+	"--medium" | "--default" | "" ) group_count=6; group_size=4 ;;
+	"--long" | "--strong" ) group_count=9; group_size=5 ;;
+	* )
+		echo "Invalid parameter \"$1\"; Usage: \`$0 [strength]\` where possible strengths are:"
+		echo "    --short OR --weak: Generates a password equivalent to a random \~64-bit-key"
+		echo "    --medium OR --default OR EMPTY: Generates a passwort equivalent to a random \~128-bit-key"
+		echo "    --long OR --strong: Generates a passwort equivalent to a random \~256-bit-key"
+		exit 1 ;;
+esac
+
+# Compute groups
+while [ $group_count -gt 0 ]; do
+	# Compute a single group
+	chars_remaining=$group_size
+	while [ $chars_remaining -gt 0 ]; do
+		byte_value=$(printf "%d" 0x$(xxd -ps -l 1 /dev/random))
+
+		# Check if `byte_value` is in range
+		if [ $byte_value -lt $range_size ]; then
+			# Compute the bucket-position and print the char
+			bucket_pos=$(( $byte_value % $bucket_size ))
+			printf "${charset:$bucket_pos:1}"
+
+			# Decrement the char-counter
+			chars_remaining=$(( $chars_remaining - 1 ))
+		fi
+	done
+
+	# Decrement the group-counter
+	group_count=$(( $group_count - 1 ))
+
+	# Check if we need to append a "-" (there is a next group) or a "\n" (this is the last group)
+	if [ $group_count -gt 0 ]; then printf "-";
+	else echo; fi
+done
